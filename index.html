@@ -76,6 +76,14 @@
         const OWNER_OPTIONS = [ '礒谷', '佑太', '亮介', '髙橋', '果鈴', 'コンサルチーム', 'AGTチーム' ];
         const STAGE_OPTIONS = ['ヒアリング', '提案', '交渉・クロージング', '受注', '失注', 'その他'];
         
+        const safeParseDate = (dateString) => {
+            if (!dateString || dateString.trim() === '') {
+                return null;
+            }
+            const date = new Date(dateString.trim());
+            return isNaN(date.getTime()) ? null : date;
+        };
+
         // --- メインアプリケーションコンポーネント ---
         function App() {
             const [db, setDb] = useState(null);
@@ -184,13 +192,15 @@
                 if (deals.length === 0) return;
                 const headers = ["案件名", "顧客名", "案件発生年月日", "案件種別", "フェーズ", "確度", "見込金額", "担当者", "受注予定年月日", "キーマイルストーン", "アクションプラン"];
                 const csvString = [ headers.join(','), ...deals.map(deal => [
-                        `"${deal.dealName || ''}"`,`"${deal.customerName || ''}"`,
+                        `"${(deal.dealName || '').replace(/"/g, '""')}"`,
+                        `"${(deal.customerName || '').replace(/"/g, '""')}"`,
                         deal.creationDate ? deal.creationDate.toLocaleDateString('ja-JP') : '',
                         `"${deal.dealType || ''}"`,`"${deal.stage || ''}"`,
-                        `"${PROBABILITY_RANKS[deal.probability] || ''}"`, deal.amount || 0,
+                        `"${PROBABILITY_RANKS[deal.probability] ?? ''}"`, deal.amount != null ? deal.amount : '',
                         `"${(Array.isArray(deal.owner) ? deal.owner.join(',') : deal.owner) || ''}"`,
                         deal.expectedCloseDate ? deal.expectedCloseDate.toLocaleDateString('ja-JP') : '',
-                        `"${deal.keyMilestone || ''}"`, `"${deal.actionPlan?.text || ''}"`,
+                        `"${(deal.keyMilestone || '').replace(/"/g, '""')}"`, 
+                        `"${(deal.actionPlan?.text || '').replace(/"/g, '""')}"`,
                     ].join(','))
                 ].join('\n');
                 const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
@@ -201,6 +211,28 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+            };
+
+            const parseCsvLine = (line) => {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"' && i + 1 < line.length && line[i+1] === '"') {
+                         current += '"';
+                         i++;
+                    } else if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current);
+                return result.map(v => v.trim().replace(/^"|"$/g, ''));
             };
             
             const handleFileChange = (event) => {
@@ -232,19 +264,23 @@
                     headerMap[rh] = index;
                 });
                 return lines.slice(1).map((line, i) => {
-                    const values = line.split(',');
-                    const probRank = values[headerMap['確度']].trim().toUpperCase();
+                    const values = parseCsvLine(line);
+                    const probRank = values[headerMap['確度']].toUpperCase();
                     const probability = PROBABILITY_FROM_RANK[probRank];
                     if(probability === undefined) throw new Error(`${i+2}行目: 確度の値「${probRank}」は無効です。S,A,B,C,D,Eのいずれかを入力してください。`);
+                    
+                    const amountStr = (values[headerMap['見込金額']] || '').replace(/,/g, '');
+
                     return {
-                        dealName: values[headerMap['案件名']].trim(), customerName: values[headerMap['顧客名']].trim(),
-                        creationDate: new Date(values[headerMap['案件発生年月日']].trim()), dealType: values[headerMap['案件種別']].trim(),
-                        stage: values[headerMap['フェーズ']].trim(), probability,
-                        amount: parseInt(values[headerMap['見込金額']].trim()) || 0, 
-                        owner: values[headerMap['担当者']].trim().split(',').map(name => name.trim()).filter(Boolean),
-                        expectedCloseDate: new Date(values[headerMap['受注予定年月日']].trim()),
-                        keyMilestone: values[headerMap['キーマイルストーン']].trim(),
-                        actionPlan: { text: values[headerMap['アクションプラン']].trim(), updatedAt: serverTimestamp(), }
+                        dealName: values[headerMap['案件名']], customerName: values[headerMap['顧客名']],
+                        creationDate: safeParseDate(values[headerMap['案件発生年月日']]), 
+                        dealType: values[headerMap['案件種別']],
+                        stage: values[headerMap['フェーズ']], probability,
+                        amount: amountStr === '' ? 0 : Number(amountStr), 
+                        owner: values[headerMap['担当者']].split(',').map(name => name.trim()).filter(Boolean),
+                        expectedCloseDate: safeParseDate(values[headerMap['受注予定年月日']]),
+                        keyMilestone: values[headerMap['キーマイルストーン']],
+                        actionPlan: { text: values[headerMap['アクションプラン']], updatedAt: serverTimestamp(), }
                     };
                 });
             };
@@ -421,9 +457,9 @@
                     owners.forEach(owner => {
                         if (summary[owner] && summary[owner][deal.probability] !== undefined) {
                             summary[owner][deal.probability].count++;
-                            summary[owner][deal.probability].amount += (deal.amount || 0);
+                            summary[owner][deal.probability].amount += (Number(deal.amount) || 0);
                             summary[owner].total.count++;
-                            summary[owner].total.amount += (deal.amount || 0);
+                            summary[owner].total.amount += (Number(deal.amount) || 0);
                         }
                     });
                 });
@@ -439,11 +475,11 @@
                     const owners = Array.isArray(deal.owner) ? deal.owner : [deal.owner];
                      if (summary[deal.probability] !== undefined) {
                         summary[deal.probability].total.count++;
-                        summary[deal.probability].total.amount += (deal.amount || 0);
+                        summary[deal.probability].total.amount += (Number(deal.amount) || 0);
                         owners.forEach(owner => {
                             if (summary[deal.probability][owner]) {
                                 summary[deal.probability][owner].count++;
-                                summary[deal.probability][owner].amount += (deal.amount || 0);
+                                summary[deal.probability][owner].amount += (Number(deal.amount) || 0);
                             }
                         });
                     }
@@ -507,7 +543,7 @@
             }, [deal.stage, deal.actionPlan?.updatedAt]);
             return (
                 <tr className="hover:bg-gray-700/50">
-                    <td className="px-4 py-4 align-top"><p className="font-bold text-white">{deal.dealName}</p><p className="text-xs text-gray-400">{deal.customerName}</p><p className="text-xs text-gray-500 mt-1">{deal.dealType}</p></td>
+                    <td className="px-4 py-4 align-top"><p className="font-bold text-white text-base">{deal.dealName}</p><p className="text-sm text-gray-300 mt-1">{deal.customerName}</p><p className="text-sm text-gray-400 mt-1">{deal.dealType}</p></td>
                     <td className="px-4 py-4 align-top"><div className="flex flex-col space-y-2"><p className="text-sm text-gray-300">{(Array.isArray(deal.owner) ? deal.owner.join(', ') : deal.owner) || '未設定'}</p><span className={`w-fit px-2 py-1 rounded-full text-xs font-semibold ${STAGE_COLORS[deal.stage] || STAGE_COLORS['その他']}`}>{deal.stage}</span><span className={`w-fit px-2 py-1 rounded-full text-xs font-semibold ${PROBABILITY_COLORS[rank] || PROBABILITY_COLORS['D']}`}>確度: {rank}</span></div></td>
                     <td className="px-4 py-4 align-top"><p className="font-mono text-white">{Number(deal.amount || 0).toLocaleString()} 円</p><p className="text-xs text-gray-400 mt-1">発生: {deal.creationDate ? deal.creationDate.toLocaleDateString() : '未設定'}</p><p className="text-xs text-gray-400">受注予定: {deal.expectedCloseDate ? deal.expectedCloseDate.toLocaleDateString() : '未設定'}</p></td>
                     <td className="px-4 py-4 align-top max-w-xs">
@@ -548,9 +584,9 @@
 
             const [formData, setFormData] = useState({
                 dealName: deal?.dealName || '', customerName: deal?.customerName || '',
-                creationDate: deal?.creationDate ? deal.creationDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                creationDate: deal?.creationDate ? deal.creationDate.toISOString().split('T')[0] : '',
                 dealType: deal?.dealType || DEAL_TYPE_OPTIONS[0], stage: deal?.stage || STAGE_OPTIONS[0],
-                probability: deal?.probability ?? 0, amount: deal?.amount || '',
+                probability: deal?.probability ?? 0, amount: deal?.amount ?? '',
                 owner: getInitialOwners(),
                 expectedCloseDate: deal?.expectedCloseDate ? deal.expectedCloseDate.toISOString().split('T')[0] : '',
                 keyMilestone: deal?.keyMilestone || '', 
@@ -577,9 +613,11 @@
                 setIsSaving(true);
                 const { actionPlanText, ...restOfData } = formData;
                 const dataToSave = {
-                    ...restOfData, amount: Number(formData.amount) || 0, probability: Number(formData.probability),
-                    creationDate: formData.creationDate ? new Date(formData.creationDate) : null,
-                    expectedCloseDate: formData.expectedCloseDate ? new Date(formData.expectedCloseDate) : null,
+                    ...restOfData, 
+                    amount: Number(String(formData.amount).replace(/,/g, '')) || 0,
+                    probability: Number(formData.probability),
+                    creationDate: safeParseDate(formData.creationDate),
+                    expectedCloseDate: safeParseDate(formData.expectedCloseDate),
                     actionPlan: { text: actionPlanText, updatedAt: serverTimestamp(), },
                 };
                 try {
@@ -622,7 +660,7 @@
 
                                     <Select label="フェーズ" name="stage" value={formData.stage} onChange={handleChange}>{STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</Select>
                                     <Select label="確度" name="probability" value={formData.probability} onChange={handleChange}>{Object.entries(PROBABILITY_OPTIONS).map(([label, value]) => (<option key={value} value={value}>{label}</option>))}</Select>
-                                    <Input label="見込金額 (円)" name="amount" type="number" value={formData.amount} onChange={handleChange} />
+                                    <Input label="見込金額 (円)" name="amount" type="text" value={formData.amount} onChange={handleChange} />
                                     <Input label="受注予定年月日" name="expectedCloseDate" type="date" value={formData.expectedCloseDate} onChange={handleChange} className="md:col-span-2"/>
                                     <div className="md:col-span-2 mt-4 pt-4 border-t border-gray-700"><Input label="キーマイルストーン" name="keyMilestone" value={formData.keyMilestone} onChange={handleChange} isTextarea /></div>
                                     <div className="md:col-span-2"><Input label="アクションプラン" name="actionPlanText" value={formData.actionPlanText} onChange={handleChange} isTextarea /></div>
@@ -643,7 +681,7 @@
         }
 
         function ImportModal({ deals, error, onConfirm, onClose }) {
-            return (<div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-700"><div className="p-6 border-b border-gray-700"><h2 className="text-xl font-bold text-white">CSVインポート確認</h2></div><div className="p-6 flex-grow overflow-y-auto">{error && (<div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md"><h3 className="font-bold">インポートエラー</h3><p className="mt-2 text-sm">{error}</p></div>)}{deals && deals.length > 0 && (<div><p className="text-gray-400 mb-4">{deals.length}件の案件がインポートされます。内容を確認してください。</p><div className="overflow-x-auto"><table className="w-full text-xs text-left"><thead className="bg-gray-700/50"><tr><th className="px-4 py-2 font-medium text-gray-300">案件名</th><th className="px-4 py-2 font-medium text-gray-300">顧客名</th><th className="px-4 py-2 font-medium text-gray-300">担当者</th><th className="px-4 py-2 font-medium text-gray-300">確度</th><th className="px-4 py-2 font-medium text-gray-300 text-right">見込金額</th></tr></thead><tbody className="divide-y divide-gray-700">{deals.map((deal, index) => (<tr key={index} className="hover:bg-gray-700/50"><td className="px-4 py-2">{deal.dealName}</td><td className="px-4 py-2">{deal.customerName}</td><td className="px-4 py-2">{deal.owner.join(', ')}</td><td className="px-4 py-2">{PROBABILITY_RANKS[deal.probability]}</td><td className="px-4 py-2 text-right font-mono">{deal.amount.toLocaleString()}</td></tr>))}</tbody></table></div></div>)}</div><div className="bg-gray-900/50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-700"><Button type="button" variant="outline" onClick={onClose}>キャンセル</Button><Button type="button" onClick={onConfirm} variant="primary" disabled={!deals || deals.length === 0}>インポート実行</Button></div></div></div>);
+            return (<div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-700"><div className="flex justify-between items-center p-4 border-b border-gray-700"><h2 className="text-xl font-bold text-white">CSVインポート確認</h2><button onClick={onClose} className="text-gray-400 hover:text-white"><X /></button></div><div className="p-6 flex-grow overflow-y-auto">{error && (<div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md"><h3 className="font-bold">インポートエラー</h3><p className="mt-2 text-sm">{error}</p></div>)}{deals && deals.length > 0 && (<div><p className="text-gray-400 mb-4">{deals.length}件の案件がインポートされます。内容を確認してください。</p><div className="overflow-x-auto"><table className="w-full text-xs text-left"><thead className="bg-gray-700/50"><tr><th className="px-4 py-2 font-medium text-gray-300">案件名</th><th className="px-4 py-2 font-medium text-gray-300">顧客名</th><th className="px-4 py-2 font-medium text-gray-300">担当者</th><th className="px-4 py-2 font-medium text-gray-300">確度</th><th className="px-4 py-2 font-medium text-gray-300 text-right">見込金額</th></tr></thead><tbody className="divide-y divide-gray-700">{deals.map((deal, index) => (<tr key={index} className="hover:bg-gray-700/50"><td className="px-4 py-2">{deal.dealName}</td><td className="px-4 py-2">{deal.customerName}</td><td className="px-4 py-2">{deal.owner.join(', ')}</td><td className="px-4 py-2">{PROBABILITY_RANKS[deal.probability]}</td><td className="px-4 py-2 text-right font-mono">{deal.amount.toLocaleString()}</td></tr>))}</tbody></table></div></div>)}</div><div className="bg-gray-900/50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-700"><Button type="button" variant="outline" onClick={onClose}>キャンセル</Button><Button type="button" onClick={onConfirm} variant="primary" disabled={!deals || deals.length === 0}>インポート実行</Button></div></div></div>);
         }
 
         function Input({ label, className, isTextarea, ...props }) {
