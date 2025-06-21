@@ -96,6 +96,7 @@
             const [isSummaryVisible, setIsSummaryVisible] = useState(false);
             const [dealsToImport, setDealsToImport] = useState(null);
             const [importError, setImportError] = useState(null);
+            const [selectedOwner, setSelectedOwner] = useState('all');
             
             useEffect(() => {
                 try {
@@ -149,6 +150,16 @@
                     return () => unsubscribe();
                 }
             }, [appState, db, user]);
+
+            const filteredDeals = useMemo(() => {
+                if (selectedOwner === 'all') {
+                    return deals;
+                }
+                return deals.filter(deal => {
+                    const owners = Array.isArray(deal.owner) ? deal.owner : [deal.owner];
+                    return owners.includes(selectedOwner);
+                });
+            }, [deals, selectedOwner]);
 
             if (appState === 'loading') {
                 return <LoadingSpinner />;
@@ -299,19 +310,17 @@
                 <div className="bg-gray-900 min-h-screen font-sans text-gray-200">
                     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
                         <Header onNewDeal={() => handleOpenModal()} onExport={exportToCSV} onImport={handleFileChange} userId={user?.uid}/>
-                        <DashboardSummary deals={deals} />
+                        <ControlsBar 
+                            selectedOwner={selectedOwner}
+                            onOwnerChange={setSelectedOwner}
+                            isSummaryVisible={isSummaryVisible}
+                            onToggleSummary={() => setIsSummaryVisible(!isSummaryVisible)}
+                        />
+                        <DashboardSummary deals={filteredDeals} />
                         <GoalSummary deals={deals} />
-                        <div className="my-6">
-                            <div className="flex justify-end">
-                                <Button variant="outline" onClick={() => setIsSummaryVisible(!isSummaryVisible)}>
-                                    <TrendingUp className="mr-2 h-4 w-4" />
-                                    {isSummaryVisible ? '集計を隠す' : '集計を表示する'}
-                                </Button>
-                            </div>
-                            {isSummaryVisible && ( <div className="mt-4"><SummaryView deals={deals} /></div> )}
-                        </div>
+                        {isSummaryVisible && ( <div className="mt-6"><SummaryView deals={filteredDeals} /></div> )}
                         <div className="mt-6 bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-                             <DealTable deals={deals} onEdit={handleOpenModal} onDelete={handleDeleteRequest} />
+                             <DealTable deals={filteredDeals} onEdit={handleOpenModal} onDelete={handleDeleteRequest} />
                         </div>
                     </div>
                     {isModalOpen && <DealModal deal={currentDeal} onSave={handleSaveDeal} onClose={handleCloseModal} />}
@@ -359,8 +368,7 @@
         }
 
         function Header({ onNewDeal, onExport, onImport, userId }) {
-            const fileInputRef = useRef(null);
-            return (
+             return (
                 <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
                     <div className="flex items-center space-x-3">
                         <Flame className="text-orange-500 h-10 w-10" />
@@ -369,13 +377,39 @@
                             <p className="text-sm text-gray-400 mt-1"> ユーザーID: <span className="font-mono bg-gray-700 text-gray-300 px-1 rounded">{userId || '読み込み中...'}</span></p>
                         </div>
                     </div>
-                    <div className="flex items-center space-x-2 mt-4 sm:mt-0">
-                        <input type="file" ref={fileInputRef} onChange={onImport} accept=".csv" className="hidden" />
-                        <Button onClick={() => fileInputRef.current.click()} variant="outline"><FileUp className="mr-2 h-4 w-4" />CSVインポート</Button>
-                        <Button onClick={onExport} variant="outline"><FileDown className="mr-2 h-4 w-4" />CSVエクスポート</Button>
+                     <div className="flex items-center space-x-2 mt-4 sm:mt-0">
                         <Button onClick={onNewDeal}><PlusCircle className="mr-2 h-4 w-4" />新規案件の追加</Button>
                     </div>
                 </header>
+            );
+        }
+
+        function ControlsBar({ selectedOwner, onOwnerChange, isSummaryVisible, onToggleSummary, onExport, onImport }) {
+            const fileInputRef = useRef(null);
+            return (
+                 <div className="my-6 p-4 bg-gray-800/50 rounded-xl flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <label htmlFor="owner-filter" className="text-sm font-medium text-gray-400 mr-2">担当者フィルター:</label>
+                        <select
+                            id="owner-filter"
+                            value={selectedOwner}
+                            onChange={(e) => onOwnerChange(e.target.value)}
+                             className="bg-gray-700 border border-gray-600 rounded-md py-2 pl-3 pr-10 text-white focus:ring-2 focus:ring-orange-500 text-sm"
+                        >
+                            <option value="all">全員</option>
+                            {OWNER_OPTIONS.map(owner => <option key={owner} value={owner}>{owner}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                         <input type="file" ref={fileInputRef} onChange={onImport} accept=".csv" className="hidden" />
+                        <Button onClick={() => fileInputRef.current.click()} variant="outline"><FileUp className="mr-2 h-4 w-4" />インポート</Button>
+                        <Button onClick={onExport} variant="outline"><FileDown className="mr-2 h-4 w-4" />エクスポート</Button>
+                        <Button variant="outline" onClick={onToggleSummary}>
+                            <TrendingUp className="mr-2 h-4 w-4" />
+                            {isSummaryVisible ? '集計を隠す' : '集計を表示'}
+                        </Button>
+                    </div>
+                </div>
             );
         }
         
@@ -573,7 +607,7 @@
 
         function DealModal({ deal, onSave, onClose }) {
             const [isSaving, setIsSaving] = useState(false);
-
+            
             const [formData, setFormData] = useState({
                 dealName: deal?.dealName || '', customerName: deal?.customerName || '',
                 creationDate: deal?.creationDate ? deal.creationDate.toISOString().split('T')[0] : '',
@@ -650,7 +684,7 @@
         }
 
         function ImportModal({ deals, error, onConfirm, onClose }) {
-            return (<div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-700"><div className="flex justify-between items-center p-4 border-b border-gray-700"><h2 className="text-xl font-bold text-white">CSVインポート確認</h2><button onClick={onClose} className="text-gray-400 hover:text-white"><X /></button></div><div className="p-6 flex-grow overflow-y-auto">{error && (<div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md"><h3 className="font-bold">インポートエラー</h3><p className="mt-2 text-sm">{error}</p></div>)}{deals && deals.length > 0 && (<div><p className="text-gray-400 mb-4">{deals.length}件の案件がインポートされます。内容を確認してください。</p><div className="overflow-x-auto"><table className="w-full text-xs text-left"><thead className="bg-gray-700/50"><tr><th className="px-4 py-2 font-medium text-gray-300">案件名</th><th className="px-4 py-2 font-medium text-gray-300">顧客名</th><th className="px-4 py-2 font-medium text-gray-300">担当者</th><th className="px-4 py-2 font-medium text-gray-300">確度</th><th className="px-4 py-2 font-medium text-gray-300 text-right">見込金額</th></tr></thead><tbody className="divide-y divide-gray-700">{deals.map((deal, index) => (<tr key={index} className="hover:bg-gray-700/50"><td className="px-4 py-2">{deal.dealName}</td><td className="px-4 py-2">{deal.customerName}</td><td className="px-4 py-2">{deal.owner.join(', ')}</td><td className="px-4 py-2">{PROBABILITY_RANKS[deal.probability]}</td><td className="px-4 py-2 text-right font-mono">{Number(deal.amount || 0).toLocaleString()}</td></tr>))}</tbody></table></div></div>)}</div><div className="bg-gray-900/50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-700"><Button type="button" variant="outline" onClick={onClose}>キャンセル</Button><Button type="button" onClick={onConfirm} variant="primary" disabled={!deals || deals.length === 0}>インポート実行</Button></div></div></div>);
+            return (<div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-700"><div className="flex justify-between items-center p-4 border-b border-gray-700"><h2 className="text-xl font-bold text-white">CSVインポート確認</h2><button onClick={onClose} className="text-gray-400 hover:text-white"><X /></button></div><div className="p-6 flex-grow overflow-y-auto">{error && (<div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md"><h3 className="font-bold">インポートエラー</h3><p className="mt-2 text-sm">{error}</p></div>)}{deals && deals.length > 0 && (<div><p className="text-gray-400 mb-4">{deals.length}件の案件がインポートされます。内容を確認してください。</p><div className="overflow-x-auto"><table className="w-full text-xs text-left"><thead className="bg-gray-700/50"><tr><th className="px-4 py-2 font-medium text-gray-300">案件名</th><th className="px-4 py-2 font-medium text-gray-300">顧客名</th><th className="px-4 py-2 font-medium text-gray-300">担当者</th><th className="px-4 py-2 font-medium text-gray-300">確度</th><th className="px-4 py-2 font-medium text-gray-300 text-right">見込金額</th></tr></thead><tbody className="divide-y divide-gray-700">{deals.map((deal, index) => (<tr key={index} className="hover:bg-gray-700/50"><td className="px-4 py-2">{deal.dealName}</td><td className="px-4 py-2">{deal.customerName}</td><td className="px-4 py-2">{Array.isArray(deal.owner) ? deal.owner.join(', '): deal.owner}</td><td className="px-4 py-2">{PROBABILITY_RANKS[deal.probability]}</td><td className="px-4 py-2 text-right font-mono">{Number(deal.amount || 0).toLocaleString()}</td></tr>))}</tbody></table></div></div>)}</div><div className="bg-gray-900/50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-700"><Button type="button" variant="outline" onClick={onClose}>キャンセル</Button><Button type="button" onClick={onConfirm} variant="primary" disabled={!deals || deals.length === 0}>インポート実行</Button></div></div></div>);
         }
 
         function Input({ label, className, isTextarea, ...props }) {
