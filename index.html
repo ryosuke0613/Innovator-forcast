@@ -576,40 +576,21 @@
         function DealModal({ deal, onSave, onClose }) {
             const [isSaving, setIsSaving] = useState(false);
             
-            const getInitialOwners = () => {
-                if (!deal?.owner) return [];
-                if (Array.isArray(deal.owner)) return deal.owner;
-                return [deal.owner];
-            };
-
             const [formData, setFormData] = useState({
                 dealName: deal?.dealName || '', customerName: deal?.customerName || '',
                 creationDate: deal?.creationDate ? deal.creationDate.toISOString().split('T')[0] : '',
                 dealType: deal?.dealType || DEAL_TYPE_OPTIONS[0], stage: deal?.stage || STAGE_OPTIONS[0],
                 probability: deal?.probability ?? 0, amount: deal?.amount ?? '',
-                owner: getInitialOwners(),
+                owner: deal?.owner || OWNER_OPTIONS[0],
                 expectedCloseDate: deal?.expectedCloseDate ? deal.expectedCloseDate.toISOString().split('T')[0] : '',
                 keyMilestone: deal?.keyMilestone || '', 
                 actionPlanText: deal?.actionPlan?.text || '',
             });
             
-            const handleOwnerChange = (ownerName) => {
-                setFormData(prev => {
-                    const newOwners = prev.owner.includes(ownerName)
-                        ? prev.owner.filter(name => name !== ownerName)
-                        : [...prev.owner, ownerName];
-                    return { ...prev, owner: newOwners };
-                });
-            };
-
             const handleChange = (e) => { const { name, value } = e.target; setFormData(prev => ({ ...prev, [name]: value })); };
             
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                if (formData.owner.length === 0) {
-                    alert("担当者を少なくとも1人選択してください。");
-                    return;
-                }
                 setIsSaving(true);
                 const { actionPlanText, ...restOfData } = formData;
                 const dataToSave = {
@@ -646,21 +627,11 @@
                                     <Input label="案件発生年月日" name="creationDate" type="date" value={formData.creationDate} onChange={handleChange} />
                                     <Select label="案件種別" name="dealType" value={formData.dealType} onChange={handleChange} className="md:col-span-2">{DEAL_TYPE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</Select>
                                     
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-400 mb-2">担当者 (複数選択可)</label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                            {OWNER_OPTIONS.map(owner => (
-                                                <label key={owner} className="flex items-center space-x-2 p-2 rounded-md bg-gray-700/50 hover:bg-gray-700 cursor-pointer">
-                                                    <input type="checkbox" checked={formData.owner.includes(owner)} onChange={() => handleOwnerChange(owner)} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-orange-500 focus:ring-orange-500" />
-                                                    <span>{owner}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
+                                    <Select label="担当者" name="owner" value={formData.owner} onChange={handleChange} className="md:col-span-2">{OWNER_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</Select>
 
                                     <Select label="フェーズ" name="stage" value={formData.stage} onChange={handleChange}>{STAGE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</Select>
                                     <Select label="確度" name="probability" value={formData.probability} onChange={handleChange}>{Object.entries(PROBABILITY_OPTIONS).map(([label, value]) => (<option key={value} value={value}>{label}</option>))}</Select>
-                                    <Input label="見込金額 (円)" name="amount" type="text" value={formData.amount} onChange={handleChange} />
+                                    <Input label="見込金額 (円)" name="amount" type="number" value={formData.amount} onChange={handleChange} />
                                     <Input label="受注予定年月日" name="expectedCloseDate" type="date" value={formData.expectedCloseDate} onChange={handleChange} className="md:col-span-2"/>
                                     <div className="md:col-span-2 mt-4 pt-4 border-t border-gray-700"><Input label="キーマイルストーン" name="keyMilestone" value={formData.keyMilestone} onChange={handleChange} isTextarea /></div>
                                     <div className="md:col-span-2"><Input label="アクションプラン" name="actionPlanText" value={formData.actionPlanText} onChange={handleChange} isTextarea /></div>
