@@ -77,9 +77,7 @@
         const STAGE_OPTIONS = ['ヒアリング', '提案', '交渉・クロージング', '受注', '失注', 'その他'];
         
         const safeParseDate = (dateString) => {
-            if (!dateString || dateString.trim() === '') {
-                return null;
-            }
+            if (!dateString || dateString.trim() === '') return null;
             const date = new Date(dateString.trim());
             return isNaN(date.getTime()) ? null : date;
         };
@@ -544,7 +542,7 @@
             return (
                 <tr className="hover:bg-gray-700/50">
                     <td className="px-4 py-4 align-top"><p className="font-bold text-white text-base">{deal.dealName}</p><p className="text-sm text-gray-300 mt-1">{deal.customerName}</p><p className="text-sm text-gray-400 mt-1">{deal.dealType}</p></td>
-                    <td className="px-4 py-4 align-top"><div className="flex flex-col space-y-2"><p className="text-sm text-gray-300">{(Array.isArray(deal.owner) ? deal.owner.join(', ') : deal.owner) || '未設定'}</p><span className={`w-fit px-2 py-1 rounded-full text-xs font-semibold ${STAGE_COLORS[deal.stage] || STAGE_COLORS['その他']}`}>{deal.stage}</span><span className={`w-fit px-2 py-1 rounded-full text-xs font-semibold ${PROBABILITY_COLORS[rank] || PROBABILITY_COLORS['D']}`}>確度: {rank}</span></div></td>
+                    <td className="px-4 py-4 align-top"><div className="flex flex-col space-y-2"><p className="text-sm text-gray-300">{deal.owner || '未設定'}</p><span className={`w-fit px-2 py-1 rounded-full text-xs font-semibold ${STAGE_COLORS[deal.stage] || STAGE_COLORS['その他']}`}>{deal.stage}</span><span className={`w-fit px-2 py-1 rounded-full text-xs font-semibold ${PROBABILITY_COLORS[rank] || PROBABILITY_COLORS['D']}`}>確度: {rank}</span></div></td>
                     <td className="px-4 py-4 align-top"><p className="font-mono text-white">{Number(deal.amount || 0).toLocaleString()} 円</p><p className="text-xs text-gray-400 mt-1">発生: {deal.creationDate ? deal.creationDate.toLocaleDateString() : '未設定'}</p><p className="text-xs text-gray-400">受注予定: {deal.expectedCloseDate ? deal.expectedCloseDate.toLocaleDateString() : '未設定'}</p></td>
                     <td className="px-4 py-4 align-top max-w-xs">
                         <div><p className="font-semibold text-xs text-gray-400">キーマイルストーン</p><p className="text-sm text-gray-300 whitespace-pre-wrap">{deal.keyMilestone || '未設定'}</p></div>
@@ -575,7 +573,7 @@
 
         function DealModal({ deal, onSave, onClose }) {
             const [isSaving, setIsSaving] = useState(false);
-            
+
             const [formData, setFormData] = useState({
                 dealName: deal?.dealName || '', customerName: deal?.customerName || '',
                 creationDate: deal?.creationDate ? deal.creationDate.toISOString().split('T')[0] : '',
@@ -652,7 +650,7 @@
         }
 
         function ImportModal({ deals, error, onConfirm, onClose }) {
-            return (<div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-700"><div className="flex justify-between items-center p-4 border-b border-gray-700"><h2 className="text-xl font-bold text-white">CSVインポート確認</h2><button onClick={onClose} className="text-gray-400 hover:text-white"><X /></button></div><div className="p-6 flex-grow overflow-y-auto">{error && (<div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md"><h3 className="font-bold">インポートエラー</h3><p className="mt-2 text-sm">{error}</p></div>)}{deals && deals.length > 0 && (<div><p className="text-gray-400 mb-4">{deals.length}件の案件がインポートされます。内容を確認してください。</p><div className="overflow-x-auto"><table className="w-full text-xs text-left"><thead className="bg-gray-700/50"><tr><th className="px-4 py-2 font-medium text-gray-300">案件名</th><th className="px-4 py-2 font-medium text-gray-300">顧客名</th><th className="px-4 py-2 font-medium text-gray-300">担当者</th><th className="px-4 py-2 font-medium text-gray-300">確度</th><th className="px-4 py-2 font-medium text-gray-300 text-right">見込金額</th></tr></thead><tbody className="divide-y divide-gray-700">{deals.map((deal, index) => (<tr key={index} className="hover:bg-gray-700/50"><td className="px-4 py-2">{deal.dealName}</td><td className="px-4 py-2">{deal.customerName}</td><td className="px-4 py-2">{deal.owner.join(', ')}</td><td className="px-4 py-2">{PROBABILITY_RANKS[deal.probability]}</td><td className="px-4 py-2 text-right font-mono">{deal.amount.toLocaleString()}</td></tr>))}</tbody></table></div></div>)}</div><div className="bg-gray-900/50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-700"><Button type="button" variant="outline" onClick={onClose}>キャンセル</Button><Button type="button" onClick={onConfirm} variant="primary" disabled={!deals || deals.length === 0}>インポート実行</Button></div></div></div>);
+            return (<div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center p-4"><div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-gray-700"><div className="flex justify-between items-center p-4 border-b border-gray-700"><h2 className="text-xl font-bold text-white">CSVインポート確認</h2><button onClick={onClose} className="text-gray-400 hover:text-white"><X /></button></div><div className="p-6 flex-grow overflow-y-auto">{error && (<div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-md"><h3 className="font-bold">インポートエラー</h3><p className="mt-2 text-sm">{error}</p></div>)}{deals && deals.length > 0 && (<div><p className="text-gray-400 mb-4">{deals.length}件の案件がインポートされます。内容を確認してください。</p><div className="overflow-x-auto"><table className="w-full text-xs text-left"><thead className="bg-gray-700/50"><tr><th className="px-4 py-2 font-medium text-gray-300">案件名</th><th className="px-4 py-2 font-medium text-gray-300">顧客名</th><th className="px-4 py-2 font-medium text-gray-300">担当者</th><th className="px-4 py-2 font-medium text-gray-300">確度</th><th className="px-4 py-2 font-medium text-gray-300 text-right">見込金額</th></tr></thead><tbody className="divide-y divide-gray-700">{deals.map((deal, index) => (<tr key={index} className="hover:bg-gray-700/50"><td className="px-4 py-2">{deal.dealName}</td><td className="px-4 py-2">{deal.customerName}</td><td className="px-4 py-2">{deal.owner.join(', ')}</td><td className="px-4 py-2">{PROBABILITY_RANKS[deal.probability]}</td><td className="px-4 py-2 text-right font-mono">{Number(deal.amount || 0).toLocaleString()}</td></tr>))}</tbody></table></div></div>)}</div><div className="bg-gray-900/50 px-6 py-4 flex justify-end space-x-3 border-t border-gray-700"><Button type="button" variant="outline" onClick={onClose}>キャンセル</Button><Button type="button" onClick={onConfirm} variant="primary" disabled={!deals || deals.length === 0}>インポート実行</Button></div></div></div>);
         }
 
         function Input({ label, className, isTextarea, ...props }) {
