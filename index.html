@@ -67,13 +67,13 @@
         const GOAL_TRAINING = 100000000;
         const ACTION_PLAN_ALERT_DAYS = 7;
 
-        const PROBABILITY_OPTIONS = { 'S (100%)': 100, 'A (80%)': 80, 'B (50%)': 50, 'C (30%)': 30, 'D (10%)': 10, };
+        const PROBABILITY_OPTIONS = { 'S (100%)': 100, 'A (80%)': 80, 'B (50%)': 50, 'C (30%)': 30, 'D (10%)': 10, 'E (0%)': 0 };
         const PROBABILITY_VALUES = Object.values(PROBABILITY_OPTIONS);
-        const PROBABILITY_RANKS = { 10: 'D', 30: 'C', 50: 'B', 80: 'A', 100: 'S', };
-        const PROBABILITY_FROM_RANK = { 'S': 100, 'A': 80, 'B': 50, 'C': 30, 'D': 10, };
-        const PROBABILITY_COLORS = { 'D': 'bg-gray-600 text-gray-100', 'C': 'bg-blue-800 text-blue-100', 'B': 'bg-yellow-800 text-yellow-100', 'A': 'bg-orange-800 text-orange-100', 'S': 'bg-green-800 text-green-100', };
+        const PROBABILITY_RANKS = { 0: 'E', 10: 'D', 30: 'C', 50: 'B', 80: 'A', 100: 'S', };
+        const PROBABILITY_FROM_RANK = { 'S': 100, 'A': 80, 'B': 50, 'C': 30, 'D': 10, 'E': 0 };
+        const PROBABILITY_COLORS = { 'E': 'bg-gray-800 text-gray-300', 'D': 'bg-gray-600 text-gray-100', 'C': 'bg-blue-800 text-blue-100', 'B': 'bg-yellow-800 text-yellow-100', 'A': 'bg-orange-800 text-orange-100', 'S': 'bg-green-800 text-green-100', };
         const DEAL_TYPE_OPTIONS = [ 'BM（6ヶ月）以上', 'BM（3ヶ月）', 'BM単発', '研修', 'AGT（450万以上）', 'AGT（ノーマル）', 'MD' ];
-        const OWNER_OPTIONS = [ '礒谷', '佑太', '亮介', '髙橋', '果鈴' ];
+        const OWNER_OPTIONS = [ '礒谷', '佑太', '亮介', '髙橋', '果鈴', 'コンサルチーム', 'AGTチーム' ];
         const STAGE_OPTIONS = ['ヒアリング', '提案', '交渉・クロージング', '受注', '失注', 'その他'];
         
         // --- メインアプリケーションコンポーネント ---
@@ -235,7 +235,7 @@
                     const values = line.split(',');
                     const probRank = values[headerMap['確度']].trim().toUpperCase();
                     const probability = PROBABILITY_FROM_RANK[probRank];
-                    if(probability === undefined) throw new Error(`${i+2}行目: 確度の値「${probRank}」は無効です。S,A,B,C,Dのいずれかを入力してください。`);
+                    if(probability === undefined) throw new Error(`${i+2}行目: 確度の値「${probRank}」は無効です。S,A,B,C,D,Eのいずれかを入力してください。`);
                     return {
                         dealName: values[headerMap['案件名']].trim(), customerName: values[headerMap['顧客名']].trim(),
                         creationDate: new Date(values[headerMap['案件発生年月日']].trim()), dealType: values[headerMap['案件種別']].trim(),
@@ -419,7 +419,7 @@
                 deals.forEach(deal => {
                     const owners = Array.isArray(deal.owner) ? deal.owner : [deal.owner];
                     owners.forEach(owner => {
-                        if (summary[owner] && summary[owner][deal.probability]) {
+                        if (summary[owner] && summary[owner][deal.probability] !== undefined) {
                             summary[owner][deal.probability].count++;
                             summary[owner][deal.probability].amount += (deal.amount || 0);
                             summary[owner].total.count++;
@@ -437,7 +437,7 @@
                 });
                 deals.forEach(deal => {
                     const owners = Array.isArray(deal.owner) ? deal.owner : [deal.owner];
-                     if (summary[deal.probability]) {
+                     if (summary[deal.probability] !== undefined) {
                         summary[deal.probability].total.count++;
                         summary[deal.probability].total.amount += (deal.amount || 0);
                         owners.forEach(owner => {
@@ -550,7 +550,7 @@
                 dealName: deal?.dealName || '', customerName: deal?.customerName || '',
                 creationDate: deal?.creationDate ? deal.creationDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 dealType: deal?.dealType || DEAL_TYPE_OPTIONS[0], stage: deal?.stage || STAGE_OPTIONS[0],
-                probability: deal?.probability || 10, amount: deal?.amount || '',
+                probability: deal?.probability ?? 0, amount: deal?.amount || '',
                 owner: getInitialOwners(),
                 expectedCloseDate: deal?.expectedCloseDate ? deal.expectedCloseDate.toISOString().split('T')[0] : '',
                 keyMilestone: deal?.keyMilestone || '', 
@@ -610,7 +610,7 @@
                                     
                                     <div className="md:col-span-2">
                                         <label className="block text-sm font-medium text-gray-400 mb-2">担当者 (複数選択可)</label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                             {OWNER_OPTIONS.map(owner => (
                                                 <label key={owner} className="flex items-center space-x-2 p-2 rounded-md bg-gray-700/50 hover:bg-gray-700 cursor-pointer">
                                                     <input type="checkbox" checked={formData.owner.includes(owner)} onChange={() => handleOwnerChange(owner)} className="h-4 w-4 rounded bg-gray-600 border-gray-500 text-orange-500 focus:ring-orange-500" />
